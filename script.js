@@ -1,11 +1,3 @@
-// API Configuration
-// IMPORTANT: Keys are now managed via the UI Settings to avoid leaking them on GitHub.
-let HF_TOKEN = localStorage.getItem('hf_token') || "";
-let OPENROUTER_KEY = localStorage.getItem('openrouter_key') || "";
-
-// Pre-fill keys from .env logic (commented out for security if pushed)
-// In a real production app, use a backend proxy.
-
 // DOM Elements
 const chatHistory = document.getElementById('chat-history');
 const chatForm = document.getElementById('chat-form');
@@ -13,72 +5,47 @@ const userInput = document.getElementById('user-input');
 const genImageBtn = document.getElementById('gen-image-btn');
 const sendBtn = document.getElementById('send-btn');
 
-// --- API Functions ---
+// --- API Functions (Using Internal Vercel Proxies) ---
 
 /**
- * Sends a chat request to OpenRouter
+ * Sends a chat request to the secure server-side proxy
  */
 async function queryChat(messages) {
-    if (!OPENROUTER_KEY) {
-        const key = prompt("Please enter your OpenRouter API Key:");
-        if (key) {
-            OPENROUTER_KEY = key;
-            localStorage.setItem('openrouter_key', key);
-        } else return { error: "OpenRouter API Key required" };
-    }
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch("/api/chat", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${OPENROUTER_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": window.location.href, // Required by OpenRouter
-                "X-Title": "Aether AI Chatbot"
+                "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                model: "openrouter/free",
-                messages: messages
-            })
+            body: JSON.stringify({ messages: messages })
         });
 
         const result = await response.json();
         return result;
     } catch (error) {
         console.error("Chat API Error:", error);
-        return { error: "Failed to connect to chat service" };
+        return { error: { message: "Failed to connect to AI server" } };
     }
 }
 
 /**
- * Generates an image using HF Flux as provided in the prompt
+ * Generates an image using the secure server-side proxy
  */
 async function queryImage(data) {
-    if (!HF_TOKEN) {
-        const key = prompt("Please enter your Hugging Face API Token:");
-        if (key) {
-            HF_TOKEN = key;
-            localStorage.setItem('hf_token', key);
-        } else return null;
-    }
     try {
-        const response = await fetch(
-            "https://router.huggingface.co/nscale/v1/images/generations",
-            {
-                headers: {
-                    Authorization: `Bearer ${HF_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
-                method: "POST",
-                body: JSON.stringify(data),
-            }
-        );
-        
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || "Generation failed");
-        }
+        const response = await fetch("/api/image", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
         
         const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Generation failed");
+        }
+        
         return result.data[0].b64_json; // Extract base64 image data
     } catch (error) {
         console.error("Image API Error:", error);
@@ -144,7 +111,7 @@ chatForm.addEventListener('submit', async (e) => {
     // Show typing
     const typing = showTyping();
 
-    // Prepare context (last 5 messages for simple history)
+    // Prepare context
     const context = [
         { role: "system", content: "You are Aether AI, a premium, intelligent assistant. Be concise, helpful, and professional." },
         { role: "user", content: text }
@@ -161,7 +128,7 @@ chatForm.addEventListener('submit', async (e) => {
         const reply = result.choices[0].message.content;
         addMessage(reply, 'bot');
     } else {
-        addMessage("Received an unexpected response from the AI service.", 'bot');
+        addMessage("The AI server is busy. Please try again in 1 minute.", 'bot');
     }
 });
 
@@ -194,7 +161,7 @@ genImageBtn.addEventListener('click', async () => {
         const img = lastMsg.querySelector('img');
         if (img) img.src = imageUrl;
     } else {
-        addMessage("Sorry, I couldn't generate that image. Please check the console for details.", 'bot');
+        addMessage("Image service is currently unavailable. Ensure the server token is configured.", 'bot');
     }
 });
 
@@ -202,17 +169,7 @@ genImageBtn.addEventListener('click', async () => {
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
         if (item.textContent.includes('Settings')) {
-            const hf = prompt("Update Hugging Face Token:", HF_TOKEN);
-            if (hf !== null) {
-                HF_TOKEN = hf;
-                localStorage.setItem('hf_token', hf);
-            }
-            const or = prompt("Update OpenRouter API Key:", OPENROUTER_KEY);
-            if (or !== null) {
-                OPENROUTER_KEY = or;
-                localStorage.setItem('openrouter_key', or);
-            }
-            if (hf || or) alert("API Configurations Updated!");
+            alert("API Keys are now securely managed on the server. No manual setup required!");
         }
     });
 });
